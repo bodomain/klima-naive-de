@@ -1,0 +1,38 @@
+# Python runtime/cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local analysis outputs
+outputs*/
+
+# Downloaded/reconstructed data cache
+data_cache/
+
+# Large climate data files
+*.nc
+*.nc4
+*.grib
+*.grb
+*.grb2
+*.zip
+
+# Generated tables and figures outside output folders
+*.png
+*.pdf
+*.csv
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
