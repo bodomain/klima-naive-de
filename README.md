@@ -1,10 +1,10 @@
-# Climate VAR/VECM Forecast Germany
+# HYRAS Climate VAR Forecast Germany
 
-Python workflow for a naive multivariate time-series analysis of German climate indicators and atmospheric CO2.
+Python workflow for a naive multivariate time-series analysis of German HYRAS maximum temperature, DWD sunshine and precipitation, and atmospheric CO2.
 
 ## What It Does
 
-The script `climate_var_vecm_forecast.py` downloads and combines:
+The script `climate_var_vecm_forecast.py` downloads and combines the HYRAS-focused dataset:
 
 - HYRAS-DE gridded daily maximum air temperature (`tasmax`) from DWD
 - DWD annual station data for sunshine duration (`JA_SD_S`)
@@ -38,3 +38,4 @@ python3 climate_var_vecm_forecast.py \
 - Downloaded data and generated outputs are excluded via `.gitignore`.
 - The forecast is illustrative and statistical, not a physical climate projection.
 - The current preferred model for the HYRAS run is a mixed VAR using climate levels and `d_CO2`, because the integration orders are mixed.
+- The retained output folder is `outputs_full_hyras_precip_best/`.
