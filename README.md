@@ -28,7 +28,21 @@ python3 climate_var_vecm_forecast.py \
   --hyras-aggregation annual_spatial_max \
   --all-stations \
   --temp-aggregation max \
+  --co2-scenario linear \
   --outdir outputs_full_hyras_precip_best \
+  --cache-dir data_cache
+```
+
+Alternative exponential CO2 scenario:
+
+```bash
+python3 climate_var_vecm_forecast.py \
+  --temperature-source hyras \
+  --hyras-aggregation annual_spatial_max \
+  --all-stations \
+  --temp-aggregation max \
+  --co2-scenario exponential \
+  --outdir outputs_full_hyras_precip_exponential_co2 \
   --cache-dir data_cache
 ```
 
@@ -38,4 +52,4 @@ python3 climate_var_vecm_forecast.py \
 - Downloaded data and generated outputs are excluded via `.gitignore`.
 - The forecast is illustrative and statistical, not a physical climate projection.
 - The current preferred model for the HYRAS run is a mixed VAR using climate levels and `d_CO2`, because the integration orders are mixed.
-- The retained output folder is `outputs_full_hyras_precip_best/`.
+- The baseline output folder is `outputs_full_hyras_precip_best/`; the exponential CO2 scenario writes to `outputs_full_hyras_precip_exponential_co2/`.

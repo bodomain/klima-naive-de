@@ -68,6 +68,7 @@ VARIABLE_COLORS = {
     "co2": "#245c8a",
     "d_co2": "#245c8a",
 }
+SOURCE_NOTE = "Data sources: DWD HYRAS-DE tasmax; DWD annual station sunshine/precipitation; NOAA GML Mauna Loa CO2"
 
 DWD_ANNUAL_KL_URL = (
     "https://opendata.dwd.de/climate_environment/CDC/"
@@ -483,6 +484,10 @@ def rolling_trend(series: pd.Series, window: int = 11) -> pd.Series:
     return series.rolling(window=window, center=True, min_periods=max(3, window // 2)).mean()
 
 
+def add_source_note(fig, note: str = SOURCE_NOTE) -> None:
+    fig.text(0.5, 0.965, note, ha="center", va="top", fontsize=9, color="#333333")
+
+
 def plot_raw_trends(data: pd.DataFrame, output: Path) -> None:
     plot_cols = [col for col in MODEL_VARIABLES if col in data.columns]
     fig, axes = plt.subplots(len(plot_cols), 1, figsize=(12, 2.8 * len(plot_cols)), sharex=True)
@@ -494,8 +499,9 @@ def plot_raw_trends(data: pd.DataFrame, output: Path) -> None:
         ax.grid(alpha=0.25)
         ax.legend(loc="best")
     axes[-1].set_xlabel("Year")
-    fig.suptitle("Historical DWD climate series and NOAA CO2")
-    fig.tight_layout()
+    fig.suptitle("Historical climate series and NOAA CO2", y=0.995)
+    add_source_note(fig)
+    fig.tight_layout(rect=(0, 0, 1, 0.955))
     fig.savefig(output, dpi=160)
     plt.close(fig)
 
@@ -611,8 +617,9 @@ def save_irf_plot(bundle: ModelBundle, output: Path, periods: int = 20) -> None:
         irf = bundle.result.irf(periods)
         fig = irf.plot(orth=False)
         fig.set_size_inches(12, 9)
-        fig.suptitle(f"Impulse response functions ({bundle.model_type})")
-        fig.tight_layout()
+        fig.suptitle(f"Impulse response functions ({bundle.model_type})", y=0.995)
+        add_source_note(fig)
+        fig.tight_layout(rect=(0, 0, 1, 0.955))
         fig.savefig(output, dpi=160)
         plt.close(fig)
     except Exception as exc:
@@ -636,8 +643,9 @@ def save_fevd_plot(
         fevd = var_res.fevd(periods)
         fig = fevd.plot()
         fig.set_size_inches(12, 8)
-        fig.suptitle("Forecast error variance decomposition")
-        fig.tight_layout()
+        fig.suptitle("Forecast error variance decomposition", y=0.995)
+        add_source_note(fig)
+        fig.tight_layout(rect=(0, 0, 1, 0.955))
         fig.savefig(output, dpi=160)
         plt.close(fig)
     except Exception as exc:
@@ -697,13 +705,27 @@ def granger_tests(
     return pd.DataFrame(tests)
 
 
-def linear_co2_path(history: pd.Series, future_years: np.ndarray, lookback: int = 10) -> pd.Series:
+def scenario_co2_path(
+    history: pd.Series,
+    future_years: np.ndarray,
+    lookback: int = 10,
+    scenario: str = "linear",
+) -> pd.Series:
     tail = history.dropna().iloc[-lookback:]
-    slope, intercept, *_ = stats.linregress(tail.index.astype(float), tail.values)
-    path = intercept + slope * future_years
-    # Prevent implausible negative increments if the selected period is unusual.
-    if slope < 0:
-        path = history.iloc[-1] + np.arange(1, len(future_years) + 1) * 0.0
+    years = tail.index.astype(float)
+    if scenario == "linear":
+        slope, intercept, *_ = stats.linregress(years, tail.values)
+        path = intercept + slope * future_years
+        # Prevent implausible negative increments if the selected period is unusual.
+        if slope < 0:
+            path = history.iloc[-1] + np.arange(1, len(future_years) + 1) * 0.0
+    elif scenario == "exponential":
+        slope, intercept, *_ = stats.linregress(years, np.log(tail.values))
+        path = np.exp(intercept + slope * future_years)
+        if slope < 0:
+            path = history.iloc[-1] + np.arange(1, len(future_years) + 1) * 0.0
+    else:
+        raise ValueError(f"Unsupported CO2 scenario: {scenario}")
     return pd.Series(path, index=future_years, name="co2")
 
 
@@ -724,6 +746,8 @@ def forecast_bundle(
     levels_data: pd.DataFrame,
     horizon_end: int = 2100,
     alpha: float = 0.10,
+    co2_scenario: str = "linear",
+    co2_lookback: int = 10,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series]:
     last_year = int(levels_data.index.max())
     future_years = np.arange(last_year + 1, horizon_end + 1)
@@ -788,7 +812,12 @@ def forecast_bundle(
     lower_df = pd.DataFrame(lower, index=future_years, columns=columns)
     upper_df = pd.DataFrame(upper, index=future_years, columns=columns)
 
-    external_co2 = linear_co2_path(levels_data["co2"], future_years)
+    external_co2 = scenario_co2_path(
+        levels_data["co2"],
+        future_years,
+        lookback=co2_lookback,
+        scenario=co2_scenario,
+    )
     co2_delta = external_co2 - forecast["co2"]
     sensitivities = historical_co2_sensitivities(levels_data)
 
@@ -834,8 +863,9 @@ def plot_forecast(
         ax.grid(alpha=0.25)
         ax.legend(loc="best")
     axes[-1].set_xlabel("Year")
-    fig.suptitle("Historical data and naive VAR/VECM forecast to 2100")
-    fig.tight_layout()
+    fig.suptitle("Historical data and naive VAR/VECM forecast to 2100", y=0.995)
+    add_source_note(fig)
+    fig.tight_layout(rect=(0, 0, 1, 0.955))
     fig.savefig(output, dpi=160)
     plt.close(fig)
 
@@ -855,6 +885,8 @@ def write_report(
     all_stations: bool,
     temperature_source: str,
     hyras_aggregation: str,
+    co2_scenario: str,
+    co2_lookback: int,
 ) -> None:
     first_year, last_year = int(data.index.min()), int(data.index.max())
     forecast_end = int(forecast.index.max())
@@ -922,7 +954,7 @@ ADF and Johansen/model-selection details are written to CSV files in the output 
 
 ## Naive forecast to {forecast_end}
 
-The model baseline forecast is adjusted with an external CO2 path: a linear continuation of the last 10 historical CO2 years. Under that assumption:
+The model baseline forecast is adjusted with an external CO2 path: a {co2_scenario} continuation of the last {co2_lookback} historical CO2 years. Under that assumption:
 
 - CO2 changes by about {co2_change:.1f} ppm from {last_year} to {forecast_end}.
 - Annual maximum temperature changes by about {temp_change:.2f} deg C from {last_year} to {forecast_end}.
@@ -973,6 +1005,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--hyras-version", default="v6-1")
     parser.add_argument("--cache-dir", type=Path, default=Path("data_cache"))
+    parser.add_argument(
+        "--co2-scenario",
+        choices=["linear", "exponential"],
+        default="linear",
+        help="External CO2 path used for the long-run forecast.",
+    )
+    parser.add_argument("--co2-lookback", type=int, default=10, help="Years used to fit the external CO2 path.")
     parser.add_argument("--use-daily-max", action="store_true", help="Use daily KL TXK aggregation instead of annual KL.")
     parser.add_argument("--maxlags", type=int, default=6)
     parser.add_argument("--outdir", type=Path, default=Path("outputs"))
@@ -1065,6 +1104,8 @@ def main(argv: list[str] | None = None) -> int:
         levels_data=data,
         horizon_end=args.forecast_end,
         alpha=0.10,
+        co2_scenario=args.co2_scenario,
+        co2_lookback=args.co2_lookback,
     )
     forecast.to_csv(args.outdir / "forecast_to_2100.csv")
     lower.to_csv(args.outdir / "forecast_lower_90.csv")
@@ -1087,6 +1128,8 @@ def main(argv: list[str] | None = None) -> int:
         all_stations=args.all_stations,
         temperature_source=args.temperature_source,
         hyras_aggregation=args.hyras_aggregation,
+        co2_scenario=args.co2_scenario,
+        co2_lookback=args.co2_lookback,
     )
 
     logging.info("Done. Key output: %s", (args.outdir / "report.md").resolve())
