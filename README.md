@@ -28,7 +28,9 @@ It then:
 - `climate_analysis/models.py`: ADF/Johansen tests, VAR/VECM/VARX estimation, Granger tests, and forecast logic
 - `climate_analysis/plots.py`: raw trend, diagnostic, and forecast plots
 - `climate_analysis/reporting.py`: CSV table writing and Markdown report generation
+- `climate_analysis/structural_time_series.py`: Harvey-style state-space model for CO2 scenario forecasts
 - `climate_analysis/config.py`: shared variables, labels, URLs, and default stations
+- `structural_time_series_forecast.py`: separate structural time-series scenario runner
 
 ## Main Command
 
@@ -72,6 +74,36 @@ Available SSP CO2 pathways: `ssp119`, `ssp126`, `ssp245`, `ssp370`, `ssp370-lown
 
 The documented `ssp585` run is intentionally a high-CO2 worst-case stress test. It should not be read as the central or most likely emissions pathway.
 
+The scenario comparison output adds the five main CMIP6/ScenarioMIP CO2 pathways:
+
+- `ssp119`: SSP1-1.9
+- `ssp126`: SSP1-2.6
+- `ssp245`: SSP2-4.5
+- `ssp370`: SSP3-7.0
+- `ssp585`: SSP5-8.5 high-CO2 worst-case
+
+It writes `outputs_full_hyras_exogco2_ssp585/05_scenario_comparison.png` and `scenario_comparison_summary.csv`.
+
+## Structural Time-Series Scenario Model
+
+The structural time-series runner is the more interpretable scenario model. It fits HYRAS annual maximum temperature with a Harvey-style state-space specification:
+
+- local temperature level
+- AR(1) annual weather noise
+- logarithmic CO2 forcing, `log(CO2 / CO2_1951)`
+
+It uses CMIP6/ScenarioMIP CO2 concentration pathways as external scenario inputs and does not estimate a reverse climate-to-CO2 equation.
+
+```bash
+python3 structural_time_series_forecast.py \
+  --input outputs_full_hyras_exogco2_ssp585/climate_co2_aligned.csv \
+  --cache-dir data_cache \
+  --outdir outputs_structural_time_series \
+  --confidence-level 0.90
+```
+
+This writes `outputs_structural_time_series/01_sts_scenario_forecasts.png`, per-scenario forecast CSVs, `sts_forecast_summary.csv`, and `report.md`.
+
 Symmetric benchmark model with linear CO2 continuation:
 
 ```bash
@@ -107,9 +139,12 @@ python3 climate_var_vecm_forecast.py \
 - CO2 paths can be simple extrapolations (`linear`, `exponential`) or downloaded SSP pathways such as `ssp245`, `ssp370`, and `ssp585`.
 - `ssp585` is treated and labeled as the high-CO2 worst-case stress scenario.
 - In the SSP5-8.5 output chart, the CO2 panel also shows a dotted documentary exponential CO2 trend for comparison. That reference line is not used as model input.
+- `05_scenario_comparison.png` shows the main SSP CO2 pathways and their corresponding structural VARX temperature forecasts in one figure.
+- `outputs_structural_time_series/01_sts_scenario_forecasts.png` shows the same main SSP CO2 pathways in the structural time-series model.
 - Downloaded SSP paths are ratio-anchored to the final historical NOAA CO2 value before forecasting, avoiding an artificial one-year jump at the history/forecast boundary.
 - The preferred structural VARX specification uses `--co2-feature dlog`, i.e. annual log differences of CO2. This is more appropriate for exponentially growing CO2 series than absolute ppm differences.
 - The preferred VARX uncertainty bands use `--interval-method bootstrap`, which simulates forecast paths by resampling fitted residual vectors. The old analytic fallback is still available with `--interval-method analytic`.
 - The current preferred model for the HYRAS run is `--model-mode exogenous-co2`, because it encodes the identifying assumption that atmospheric CO2 is an external driver of the German climate variables.
 - In the structural model, no reverse CO2 equation is estimated. Effects from temperature, sunshine, or precipitation back onto CO2 are therefore excluded by assumption, not statistically disproven.
+- The structural time-series model uses CO2 levels through logarithmic forcing. It is useful as a scenario model, but it is still statistical and should not be confused with a physical climate model.
 - The preferred output folder is `outputs_full_hyras_exogco2_exponential/`.

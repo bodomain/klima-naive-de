@@ -1,0 +1,375 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\geometry{left=25mm,right=25mm,top=24mm,bottom=27mm}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue!55!black,
+  citecolor=black
+}
+\setlist[itemize]{leftmargin=*,itemsep=0.25em}
+\setlist[enumerate]{leftmargin=*,itemsep=0.25em}
+\graphicspath{{./}}
+
+\title{\textbf{A Naive Statistical Scenario Analysis of German Extreme Temperatures}\\
+\large HYRAS-DE, DWD/NOAA Observations, and CMIP6 CO$_2$ Pathways}
+\author{Project: \texttt{hightemperatuerDE}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report documents a reproducible Python workflow for exploratory climate
+time-series modelling in Germany. The main target variable is the annual spatial
+maximum of daily maximum temperature from DWD HYRAS-DE. It is combined with DWD
+sunshine duration, DWD precipitation, and atmospheric CO$_2$ concentrations from
+NOAA Mauna Loa. The statistical workflow first estimates a structural VARX model
+with CO$_2$ imposed as an external driver. For the scenario analysis, the project
+then uses a Harvey-style structural time-series model in which CO$_2$ enters as
+logarithmic forcing. The analysis is deliberately simple and statistical. It is
+not a physical climate model, but it makes the model assumptions, coefficients,
+and resulting scenario paths explicit.
+\end{abstract}
+
+\section{Data}
+
+The analysis combines four annual time series:
+\begin{itemize}
+  \item \textbf{Temperature:} DWD HYRAS-DE \texttt{tasmax}, aggregated as the
+  annual spatial maximum of daily maximum temperature over Germany.
+  \item \textbf{Sunshine duration:} DWD Climate Data Center annual station data,
+  averaged over available stations.
+  \item \textbf{Precipitation:} DWD Climate Data Center annual station data,
+  averaged over available stations.
+  \item \textbf{CO$_2$:} NOAA GML Mauna Loa annual mean CO$_2$; for future
+  scenarios, CMIP6/ScenarioMIP CO$_2$ concentration pathways from Meinshausen
+  et al. (2020).
+\end{itemize}
+
+All observed series are aligned to a common annual frequency. Short gaps are
+interpolated and the common sample period is then used for estimation. The
+scenario CO$_2$ paths are ratio-anchored to the final historical NOAA value:
+\begin{equation}
+  \widetilde C_{s,t}
+  =
+  C^{\mathrm{SSP}}_{s,t}
+  \cdot
+  \frac{C^{\mathrm{hist}}_{T}}{C^{\mathrm{SSP}}_{s,T}},
+  \qquad t > T,
+\end{equation}
+where $s$ denotes the scenario, $T$ the final historical year, and $C_t$ the
+CO$_2$ concentration in ppm. This avoids an artificial one-year jump at the
+transition from history to scenario.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{outputs_full_hyras_exogco2_ssp585/01_raw_trends.png}
+  \caption{Historical data and smoothed trends. Data sources: DWD HYRAS-DE,
+  DWD CDC annual station observations, and NOAA GML Mauna Loa.}
+  \label{fig:raw-trends}
+\end{figure}
+
+\section{Statistical Framework}
+
+\subsection{Symmetric VAR/VECM Benchmark}
+
+A conventional VAR treats all variables symmetrically. For
+\[
+  y_t =
+  \begin{pmatrix}
+    T_t & S_t & P_t & C_t
+  \end{pmatrix}^{\top},
+\]
+where $T_t$ is temperature, $S_t$ sunshine duration, $P_t$ precipitation, and
+$C_t$ CO$_2$, a VAR($p$) is
+\begin{equation}
+  y_t
+  =
+  a
+  +
+  A_1 y_{t-1}
+  +
+  \cdots
+  +
+  A_p y_{t-p}
+  +
+  u_t,
+  \qquad
+  u_t \sim (0,\Sigma_u).
+\end{equation}
+
+If all variables are integrated of order one and cointegrated, this can be
+written as a VECM:
+\begin{equation}
+  \Delta y_t
+  =
+  \alpha \beta^\top y_{t-1}
+  +
+  \sum_{i=1}^{p-1} \Gamma_i \Delta y_{t-i}
+  +
+  u_t.
+\end{equation}
+Here $\beta^\top y_{t-1}$ describes long-run equilibrium relations and $\alpha$
+contains the adjustment speeds.
+
+This symmetric framework is useful as a diagnostic benchmark, but it is hard to
+interpret causally. In particular, annual time series alone do not distinguish
+cleanly between $C_{t-k} \rightarrow T_t$ and $T_{t-k} \rightarrow C_t$ unless
+an identifying structure is imposed.
+
+\subsection{Structural VARX Model}
+
+The preferred VAR-style model therefore treats CO$_2$ as an exogenous driver.
+The climate vector
+\[
+  x_t =
+  \begin{pmatrix}
+    T_t & S_t & P_t
+  \end{pmatrix}^{\top}
+\]
+is modelled as
+\begin{equation}
+  x_t
+  =
+  b
+  +
+  \sum_{i=1}^{p} B_i x_{t-i}
+  +
+  \sum_{j=0}^{q} \gamma_j z_{t-j}
+  +
+  \varepsilon_t,
+\end{equation}
+with the CO$_2$ driver
+\begin{equation}
+  z_t = \Delta \log(C_t)
+  =
+  \log(C_t)-\log(C_{t-1}).
+\end{equation}
+This encodes the identifying assumption that global atmospheric CO$_2$ can drive
+German climate variables, while German temperature, sunshine, and precipitation
+do not drive global Mauna Loa CO$_2$ in the model.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Estimated structural VARX coefficients. Columns are the dependent
+  climate equations. The CO$_2$ driver is $\Delta\log(C_t)$.}
+  \label{tab:varx-coefficients}
+  \begin{tabular}{lrrr}
+    \toprule
+    Regressor & Temperature & Sunshine & Precipitation \\
+    \midrule
+    Constant & 29.1095 & 560.7753 & 738.0459 \\
+    $T_{t-1}$ & -0.0684 & 0.7708 & -0.7074 \\
+    $S_{t-1}$ & 0.0045 & 0.4122 & 0.0333 \\
+    $P_{t-1}$ & 0.0020 & 0.4481 & 0.0403 \\
+    $\Delta\log(C_t)$ & 320.1547 & 1379.4154 & 2615.4064 \\
+    \midrule
+    Residual standard deviation & 1.8093 & 143.4619 & 111.7436 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Harvey-Style Structural Time-Series Model}
+
+For the final scenario plot, the project uses a simple state-space model in the
+spirit of Harvey. Observed annual extreme temperature is decomposed into a
+latent temperature level, short-run weather persistence, and logarithmic
+CO$_2$ forcing:
+\begin{align}
+  T_t &= \mu_t + \beta f_t + \eta_t, \\
+  \mu_t &= \mu_{t-1} + \xi_t, \\
+  \eta_t &= \rho \eta_{t-1} + \nu_t, \\
+  f_t &= \log\left(\frac{C_t}{C_{1951}}\right).
+\end{align}
+The disturbances $\xi_t$ and $\nu_t$ are zero-mean state and weather
+innovations. The fitted specification is a
+\emph{local level + AR(1) weather + log(CO$_2$/CO$_{2,1951}$)} model.
+
+The advantage over a VARX based on $\Delta\log(C_t)$ is scenario interpretation:
+pathways with permanently higher CO$_2$ levels produce permanently higher
+temperature paths. The drawback is that a historical CO$_2$ trend and a latent
+temperature trend are difficult to separate fully in annual data.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Estimated structural time-series parameters for annual HYRAS maximum
+  temperature.}
+  \label{tab:sts-coefficients}
+  \begin{tabular}{lrrr}
+    \toprule
+    Parameter & Estimate & Std. error & $p$-value \\
+    \midrule
+    $\sigma^2_{\mathrm{irregular}}$ & 0.0000 & 20.5622 & 1.0000 \\
+    $\sigma^2_{\mathrm{level}}$ & 0.0000 & 0.0124 & 1.0000 \\
+    $\sigma^2_{\mathrm{AR}}$ & 2.9148 & 20.8470 & 0.8888 \\
+    $\rho$ & -0.1368 & 0.9419 & 0.8845 \\
+    $\beta_{\log(CO_2/C_{1951})}$ & 11.0012 & 2.0477 & $<0.001$ \\
+    \midrule
+    AIC & 299.84 & & \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Scenarios and Forecast}
+
+Forecasts to 2100 use five CMIP6/ScenarioMIP concentration pathways:
+\[
+  \mathrm{SSP1\mbox{-}1.9},\;
+  \mathrm{SSP1\mbox{-}2.6},\;
+  \mathrm{SSP2\mbox{-}4.5},\;
+  \mathrm{SSP3\mbox{-}7.0},\;
+  \mathrm{SSP5\mbox{-}8.5}.
+\]
+SSP5-8.5 is used as an extreme CMIP6 stress test. It should not be interpreted
+as a central forecast. Recent ScenarioMIP-CMIP7 work indicates that the old
+SSP5-8.5/RCP8.5 high-end emissions levels have become implausible for the 21st
+century in light of renewable-energy cost trends, existing climate policy, and
+observed emissions developments. The IPCC has also clarified that it does not
+create or own these scenarios; it assesses the relevant scientific literature.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{outputs_structural_time_series/01_sts_scenario_forecasts.png}
+  \caption{Structural time-series forecasts of annual HYRAS maximum temperature
+  under CMIP6 CO$_2$ scenarios. The uncertainty band is shown for SSP5-8.5. The
+  dotted exponential CO$_2$ line is documentary only and is not used as model
+  input.}
+  \label{fig:sts-scenarios}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Structural time-series forecast for 2100. Temperature is in degrees
+  Celsius, CO$_2$ in ppm; interval: 90\%.}
+  \label{tab:sts-results}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Scenario & CO$_2$ 2100 & $T_{\max}$ 2100 & Lower bound & Upper bound \\
+    \midrule
+    SSP1-1.9 & 393.66 & 38.18 & 35.33 & 41.03 \\
+    SSP1-2.6 & 445.09 & 39.53 & 36.68 & 42.38 \\
+    SSP2-4.5 & 600.72 & 42.83 & 39.98 & 45.68 \\
+    SSP3-7.0 & 858.75 & 46.76 & 43.91 & 49.61 \\
+    SSP5-8.5 & 1125.64 & 49.74 & 46.89 & 52.59 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Interpretation}
+
+The qualitative result is straightforward: within this model class, higher
+CO$_2$ pathways lead to higher expected annual maximum temperatures in Germany.
+Lower SSP pathways flatten the temperature trajectory, while SSP3-7.0 and
+especially SSP5-8.5 imply substantially higher heat extremes. The estimated
+coefficient on logarithmic CO$_2$ forcing in the structural time-series model is
+positive and statistically different from zero in the fitted state-space model.
+
+The interpretation should remain precise:
+\begin{itemize}
+  \item The analysis is a statistical scenario exercise, not a coupled physical
+  atmosphere-ocean model.
+  \item The direction CO$_2 \rightarrow$ German climate variables comes from the
+  imposed exogeneity assumption.
+  \item Natural variability, aerosols, land-use change, policy feedbacks,
+  regional circulation shifts, volcanic forcing, solar variability, and
+  structural breaks are not explicitly modelled.
+  \item The uncertainty bands are model-based intervals, not full physical or
+  socio-economic uncertainty ranges.
+  \item SSP5-8.5 is retained only as a historical CMIP6 stress test; it should be
+  replaced by newer CMIP7 high-end pathways once those quantitative inputs are
+  stable and public for routine use.
+\end{itemize}
+
+\section{Reproducibility}
+
+The data collection and VARX analysis are run with:
+\begin{verbatim}
+python3 climate_var_vecm_forecast.py \
+  --temperature-source hyras \
+  --hyras-aggregation annual_spatial_max \
+  --all-stations \
+  --temp-aggregation max \
+  --model-mode exogenous-co2 \
+  --co2-feature dlog \
+  --co2-scenario ssp585 \
+  --confidence-level 0.90 \
+  --interval-method bootstrap \
+  --bootstrap-sims 2000 \
+  --outdir outputs_full_hyras_exogco2_ssp585 \
+  --cache-dir data_cache
+\end{verbatim}
+
+The Harvey-style scenario model is run separately:
+\begin{verbatim}
+python3 structural_time_series_forecast.py \
+  --input outputs_full_hyras_exogco2_ssp585/climate_co2_aligned.csv \
+  --cache-dir data_cache \
+  --outdir outputs_structural_time_series \
+  --confidence-level 0.90
+\end{verbatim}
+
+\section{Preliminary Conclusion}
+
+As a preliminary result from a deliberately naive statistical model, the main
+message is plausible: sustained increases in atmospheric CO$_2$ are associated
+with higher German annual maximum temperatures in the fitted model. The scenario
+spread is also informative. Moderate CO$_2$ pathways imply much less additional
+stress than very high pathways. SSP5-8.5 should now be read as an extreme legacy
+stress test rather than as a plausible central upper scenario.
+
+\begin{thebibliography}{9}
+
+\bibitem{dwd-hyras}
+Deutscher Wetterdienst.
+\newblock HYRAS-DE gridded daily maximum air temperature.
+\newblock \url{https://opendata.dwd.de/climate_environment/CDC/grids_germany/daily/hyras_de/air_temperature_max/}
+
+\bibitem{dwd-cdc}
+Deutscher Wetterdienst.
+\newblock Climate Data Center, annual station observations.
+\newblock \url{https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/annual/kl/historical/}
+
+\bibitem{noaa-co2}
+NOAA Global Monitoring Laboratory.
+\newblock Mauna Loa annual mean CO$_2$.
+\newblock \url{https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv}
+
+\bibitem{meinshausen2020}
+Meinshausen, M. et al. (2020).
+\newblock The shared socio-economic pathway (SSP) greenhouse gas concentrations and their extensions to 2500.
+\newblock \emph{Geoscientific Model Development}, 13, 3571--3605.
+\newblock \url{https://gmd.copernicus.org/articles/13/3571/2020/}
+
+\bibitem{scenariomip2026}
+Van Vuuren, D. et al. (2026).
+\newblock The Scenario Model Intercomparison Project for CMIP7.
+\newblock \emph{Geoscientific Model Development}, 19, 2627--2677.
+\newblock \url{https://gmd.copernicus.org/articles/19/2627/2026/}
+
+\bibitem{ipcc2026statement}
+Intergovernmental Panel on Climate Change (2026).
+\newblock IPCC news comment on climate scenarios.
+\newblock \url{https://www.ipcc.ch/2026/05/20/ipcc-news-comment-2/}
+
+\bibitem{harvey1989}
+Harvey, A. C. (1989).
+\newblock \emph{Forecasting, Structural Time Series Models and the Kalman Filter}.
+\newblock Cambridge University Press.
+
+\end{thebibliography}
+
+\end{document}

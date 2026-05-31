@@ -148,3 +148,76 @@ def plot_forecast(
     fig.tight_layout(rect=(0, 0, 1, 0.955))
     fig.savefig(output, dpi=160)
     plt.close(fig)
+
+
+def plot_scenario_comparison(
+    history: pd.DataFrame,
+    scenario_forecasts: dict[str, pd.DataFrame],
+    scenario_co2_paths: dict[str, pd.Series],
+    output: Path,
+    temp_col: str = "temp",
+) -> None:
+    colors = {
+        "ssp119": "#2f9e44",
+        "ssp126": "#74b816",
+        "ssp245": "#f08c00",
+        "ssp370": "#e8590c",
+        "ssp585": "#c92a2a",
+        "exponential": "#555555",
+    }
+    labels = {
+        "ssp119": "SSP1-1.9",
+        "ssp126": "SSP1-2.6",
+        "ssp245": "SSP2-4.5",
+        "ssp370": "SSP3-7.0",
+        "ssp585": "SSP5-8.5 worst-case",
+        "exponential": "Exp. CO2 trend",
+    }
+
+    fig, axes = plt.subplots(2, 1, figsize=(13, 8.5), sharex=True)
+    temp_ax, co2_ax = axes
+    transition = int(history.index.max())
+
+    temp_ax.plot(history.index, history[temp_col], color=VARIABLE_COLORS[temp_col], lw=1.4, label="Historical HYRAS")
+    temp_ax.plot(
+        history.index,
+        history[temp_col].rolling(11, center=True, min_periods=6).mean(),
+        color="black",
+        lw=2,
+        label="11-year moving average",
+    )
+    for scenario, forecast in scenario_forecasts.items():
+        temp_ax.plot(
+            forecast.index,
+            forecast[temp_col],
+            color=colors.get(scenario, None),
+            lw=2 if scenario == "ssp585" else 1.6,
+            ls="-" if scenario == "ssp585" else "--",
+            label=f"{labels.get(scenario, scenario)} VARX",
+        )
+    temp_ax.axvline(transition, color="black", lw=1, alpha=0.6)
+    temp_ax.set_ylabel(VARIABLE_LABELS[temp_col])
+    temp_ax.grid(alpha=0.25)
+    temp_ax.legend(loc="best", ncols=2)
+
+    co2_ax.plot(history.index, history["co2"], color=VARIABLE_COLORS["co2"], lw=1.4, label="Historical NOAA CO2")
+    for scenario, path in scenario_co2_paths.items():
+        co2_ax.plot(
+            path.index,
+            path.values,
+            color=colors.get(scenario, None),
+            lw=2 if scenario == "ssp585" else 1.6,
+            ls="-" if scenario == "ssp585" else "--",
+            label=labels.get(scenario, scenario),
+        )
+    co2_ax.axvline(transition, color="black", lw=1, alpha=0.6)
+    co2_ax.set_ylabel(VARIABLE_LABELS["co2"])
+    co2_ax.set_xlabel("Year")
+    co2_ax.grid(alpha=0.25)
+    co2_ax.legend(loc="best", ncols=2)
+
+    fig.suptitle("Structural VARX forecasts under CMIP6/ScenarioMIP CO2 pathways", y=0.995)
+    add_source_note(fig)
+    fig.tight_layout(rect=(0, 0, 1, 0.955))
+    fig.savefig(output, dpi=160)
+    plt.close(fig)

@@ -150,6 +150,7 @@ The model baseline forecast is adjusted with an external CO2 path: {co2_path_not
 - Forecast start: {forecast_start}{f" ({trend_window}-year trailing smoothed climate level)" if forecast_start == "trend" else " (final observed year)"}.
 {scenario_note}
 - CO2 chart note: the dotted exponential CO2 trend, when shown, is documentary only and is not used as model input.
+- Scenario comparison: `05_scenario_comparison.png` compares SSP1-1.9, SSP1-2.6, SSP2-4.5, SSP3-7.0, and SSP5-8.5 with the same structural VARX specification.
 
 ## Limitations
 

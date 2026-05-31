@@ -31,6 +31,19 @@ data_cache/
 *.pdf
 *.csv
 
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fls
+*.fdb_latexmk
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
 # Local OS/editor files
 .DS_Store
 Thumbs.db
