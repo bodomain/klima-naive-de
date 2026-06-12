@@ -1,10 +1,13 @@
-# HYRAS Structural VARX Climate Forecast Germany
+# HYRAS Climate Tools
 
-Python workflow for a naive structural VARX time-series analysis of German HYRAS maximum temperature, DWD sunshine and precipitation, and atmospheric CO2.
+This repository contains two related but separate pieces:
+
+- `data_viewer/`: a FastAPI + React app for exploring HYRAS grid data and nearby DWD station observations.
+- `modeling/`: statistical climate analysis and forecasting scripts for HYRAS, DWD station data, and atmospheric CO2.
 
 ## What It Does
 
-The command-line entry point `climate_var_vecm_forecast.py` downloads and combines the HYRAS-focused dataset:
+The modelling entry point `modeling/climate_var_vecm_forecast.py` downloads and combines the HYRAS-focused dataset:
 
 - HYRAS-DE gridded daily maximum air temperature (`tasmax`) from DWD
 - DWD annual station data for sunshine duration (`JA_SD_S`)
@@ -21,23 +24,40 @@ It then:
 - creates a naive forecast to 2100 using an external CO2 path
 - writes plots, CSV tables, and a Markdown report
 
-## Code Layout
+## Repository Layout
 
-- `climate_var_vecm_forecast.py`: CLI and workflow orchestration
-- `climate_analysis/data.py`: DWD/NOAA/HYRAS download, parsing, and annual alignment
-- `climate_analysis/models.py`: ADF/Johansen tests, VAR/VECM/VARX estimation, Granger tests, and forecast logic
-- `climate_analysis/plots.py`: raw trend, diagnostic, and forecast plots
-- `climate_analysis/reporting.py`: CSV table writing and Markdown report generation
-- `climate_analysis/structural_time_series.py`: Harvey-style state-space model for CO2 scenario forecasts
-- `climate_analysis/config.py`: shared variables, labels, URLs, and default stations
-- `structural_time_series_forecast.py`: separate structural time-series scenario runner
+- `data_viewer/backend/`: FastAPI API for HYRAS point queries, station lookup, and preprocessing.
+- `data_viewer/frontend/`: Vite/React data viewer.
+- `data_viewer/start_app.sh`: starts the backend and frontend together.
+- `modeling/climate_var_vecm_forecast.py`: modelling CLI and workflow orchestration.
+- `modeling/structural_time_series_forecast.py`: separate structural time-series scenario runner.
+- `modeling/climate_analysis/`: reusable modelling package.
+- `docs/`: report source and generated report files.
+- `data_cache/`: downloaded HYRAS/DWD/CO2 data cache, ignored by Git.
+- `outputs*/`: generated modelling outputs, ignored by Git.
+
+## Data Viewer App
+
+Start the FastAPI backend and Vite frontend together:
+
+```bash
+./start_app.sh
+```
+
+Then open `http://127.0.0.1:5173`. Press `Ctrl-C` in the terminal to stop both servers.
+
+To refresh station coordinates in an existing local station database:
+
+```bash
+python3 data_viewer/backend/preprocessing.py --station-coordinates-only
+```
 
 ## Main Command
 
 Preferred structural HYRAS run with exponential CO2 continuation:
 
 ```bash
-python3 climate_var_vecm_forecast.py \
+python3 modeling/climate_var_vecm_forecast.py \
   --temperature-source hyras \
   --hyras-aggregation annual_spatial_max \
   --all-stations \
@@ -55,7 +75,7 @@ python3 climate_var_vecm_forecast.py \
 Preferred structural HYRAS run with an IPCC/CMIP6 high-CO2 worst-case pathway:
 
 ```bash
-python3 climate_var_vecm_forecast.py \
+python3 modeling/climate_var_vecm_forecast.py \
   --temperature-source hyras \
   --hyras-aggregation annual_spatial_max \
   --all-stations \
@@ -95,7 +115,7 @@ The structural time-series runner is the more interpretable scenario model. It f
 It uses CMIP6/ScenarioMIP CO2 concentration pathways as external scenario inputs and does not estimate a reverse climate-to-CO2 equation.
 
 ```bash
-python3 structural_time_series_forecast.py \
+python3 modeling/structural_time_series_forecast.py \
   --input outputs_full_hyras_exogco2_ssp585/climate_co2_aligned.csv \
   --cache-dir data_cache \
   --outdir outputs_structural_time_series \
@@ -107,7 +127,7 @@ This writes `outputs_structural_time_series/01_sts_scenario_forecasts.png`, per-
 Symmetric benchmark model with linear CO2 continuation:
 
 ```bash
-python3 climate_var_vecm_forecast.py \
+python3 modeling/climate_var_vecm_forecast.py \
   --temperature-source hyras \
   --hyras-aggregation annual_spatial_max \
   --all-stations \
@@ -120,7 +140,7 @@ python3 climate_var_vecm_forecast.py \
 Symmetric benchmark model with exponential CO2 continuation:
 
 ```bash
-python3 climate_var_vecm_forecast.py \
+python3 modeling/climate_var_vecm_forecast.py \
   --temperature-source hyras \
   --hyras-aggregation annual_spatial_max \
   --all-stations \

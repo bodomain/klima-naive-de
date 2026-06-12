@@ -40,7 +40,11 @@ sunshine duration, DWD precipitation, and atmospheric CO$_2$ concentrations from
 NOAA Mauna Loa. The statistical workflow first estimates a structural VARX model
 with CO$_2$ imposed as an external driver. For the scenario analysis, the project
 then uses a Harvey-style structural time-series model in which CO$_2$ enters as
-logarithmic forcing. The analysis is deliberately simple and statistical. It is
+logarithmic forcing. As a sensitivity analysis, it adds a simple one-box
+energy-balance model with logarithmic radiative forcing and bounded thermal
+adjustment. Finally, it combines the structural forcing idea with the VARX
+covariates sunshine duration and precipitation in a climate-modulated
+energy-balance model. The analysis is deliberately simple and statistical. It is
 not a physical climate model, but it makes the model assumptions, coefficients,
 and resulting scenario paths explicit.
 \end{abstract}
@@ -224,6 +228,106 @@ temperature trend are difficult to separate fully in annual data.
   \end{tabular}
 \end{table}
 
+\subsection{Energy-Balance Sensitivity Model}
+
+The structural time-series model already includes the standard diminishing
+marginal effect of CO$_2$ through the logarithmic term. However, it does not
+impose thermal inertia: high CO$_2$ levels can translate almost directly into
+high long-run temperature levels. To test whether the upper scenarios are being
+over-amplified, the project adds a deliberately simple energy-balance
+sensitivity model.
+
+The CO$_2$ forcing term is the standard logarithmic approximation
+\begin{equation}
+  F_t = 5.35 \log\left(\frac{C_t}{C_{1951}}\right),
+\end{equation}
+measured in W m$^{-2}$. The temperature dynamics are then written as
+\begin{align}
+  T^*_t &= \alpha + \lambda F_t, \\
+  T_t &= T_{t-1} + \kappa\left(T^*_t - T_{t-1}\right) + \varepsilon_t,
+  \qquad 0 < \kappa \leq \bar{\kappa}.
+\end{align}
+Here $T^*_t$ is the forcing-implied equilibrium extreme-temperature level,
+$\lambda$ is the fitted sensitivity per W m$^{-2}$, and $\kappa$ is the annual
+adjustment rate. The cap $\bar{\kappa}=0.12$ is an explicit identifying
+assumption. When $\kappa$ is estimated without a cap, annual German extreme
+temperatures prefer almost instantaneous adjustment, because this dataset is too
+noisy and too regional to identify global heat uptake. The capped model should
+therefore be read as a physically motivated sensitivity check rather than as a
+purely data-driven optimum.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Estimated energy-balance sensitivity parameters.}
+  \label{tab:ebm-parameters}
+  \begin{tabular}{lr}
+    \toprule
+    Parameter & Estimate \\
+    \midrule
+    Baseline extreme-temperature level $\alpha$ & 36.537 \\
+    Sensitivity $\lambda$ per W m$^{-2}$ & 0.965 \\
+    Annual adjustment rate $\kappa$ & 0.120 \\
+    Adjustment-rate cap $\bar{\kappa}$ & 0.120 \\
+    Residual standard deviation & 2.496 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Climate-Modulated Energy-Balance Model}
+
+The final sensitivity model combines the structural time-series logic with the
+VARX insight that regional climate covariates matter. Sunshine duration is used
+as a proxy for surface shortwave radiation and cloudiness. This is supported by
+the European sunshine-duration literature: sunshine duration is closely related
+to surface solar radiation, and European studies find strong positive
+relationships between sunshine duration and temperature trends, particularly for
+maximum temperature and summer conditions. Precipitation is included as a coarse
+moisture proxy. For heat extremes, low precipitation can reduce evaporative
+cooling and shift more energy into sensible heat.
+
+The model keeps CO$_2$ as the global background forcing and lets sunshine and
+precipitation modulate regional heat conditions:
+\begin{align}
+  F_t &= 5.35 \log\left(\frac{C_t}{C_{1951}}\right), \\
+  z^S_t &= \frac{S_t-\bar S}{\sigma_S}, \qquad
+  z^P_t = \frac{P_t-\bar P}{\sigma_P}, \\
+  T^*_t &= \alpha + \lambda_C F_t + \lambda_S z^S_t + \lambda_P z^P_t, \\
+  T_t &= T_{t-1} + \kappa\left(T^*_t - T_{t-1}\right) + \varepsilon_t.
+\end{align}
+
+The fit is regularized. Without this structure, sunshine duration can absorb the
+common historical trend and drive the CO$_2$ coefficient to zero. That is a
+statistically possible regression result, but it is not a credible attribution
+model because sunshine itself is partly a regional cloudiness and circulation
+state, not an externally prescribed global forcing. The implemented model uses
+the CO$_2$ sensitivity from the simpler EBM as a weak prior and shrinks the
+regional covariate coefficients toward zero. Thus CO$_2$ remains the structural
+background driver, while sunshine and precipitation describe regional
+amplification or damping around that background.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Estimated climate-modulated energy-balance parameters. Sunshine and
+  precipitation enter as historical z-scores.}
+  \label{tab:modulated-ebm-parameters}
+  \begin{tabular}{lr}
+    \toprule
+    Parameter & Estimate \\
+    \midrule
+    Baseline extreme-temperature level $\alpha$ & 36.587 \\
+    CO$_2$ sensitivity $\lambda_C$ per W m$^{-2}$ & 0.928 \\
+    Sunshine effect $\lambda_S$ per standard deviation & 2.969 \\
+    Precipitation effect $\lambda_P$ per standard deviation & -1.286 \\
+    Annual adjustment rate $\kappa$ & 0.120 \\
+    Adjustment-rate cap $\bar{\kappa}$ & 0.120 \\
+    CO$_2$ prior sensitivity per W m$^{-2}$ & 0.965 \\
+    CO$_2$ prior weight & 20.000 \\
+    Regional-covariate ridge weight & 1.000 \\
+    Residual standard deviation & 2.422 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \section{Scenarios and Forecast}
 
 Forecasts to 2100 use five CMIP6/ScenarioMIP concentration pathways:
@@ -269,6 +373,67 @@ create or own these scenarios; it assesses the relevant scientific literature.
   \end{tabular}
 \end{table}
 
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{outputs_structural_time_series/02_energy_balance_sensitivity.png}
+  \caption{Comparison of the Harvey-style structural time-series scenario paths
+  (dotted lines) with the bounded energy-balance sensitivity model (solid and
+  dashed lines). The energy-balance model keeps logarithmic CO$_2$ forcing but
+  adds thermal inertia, which attenuates the upper CO$_2$ scenarios.}
+  \label{fig:ebm-sensitivity}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Energy-balance sensitivity forecast for 2100. Temperature is in
+  degrees Celsius, CO$_2$ in ppm; interval: 90\%.}
+  \label{tab:ebm-results}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Scenario & CO$_2$ 2100 & Forcing & $T_{\max}$ 2100 & Lower & Upper \\
+    \midrule
+    SSP1-1.9 & 393.66 & 1.28 & 37.88 & 29.23 & 46.52 \\
+    SSP1-2.6 & 445.09 & 1.94 & 38.49 & 29.85 & 47.14 \\
+    SSP2-4.5 & 600.72 & 3.54 & 39.91 & 31.26 & 48.55 \\
+    SSP3-7.0 & 858.75 & 5.45 & 41.43 & 32.79 & 50.08 \\
+    SSP5-8.5 & 1125.64 & 6.90 & 42.70 & 34.05 & 51.34 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{outputs_structural_time_series/03_climate_modulated_ebm.png}
+  \caption{Climate-modulated energy-balance forecast under SSP3-7.0. The normal
+  path uses historical mean sunshine and precipitation. The sunny-dry path uses
+  sunshine one historical standard deviation above normal and precipitation one
+  standard deviation below normal. The cloudy-wet path applies the opposite
+  regional state.}
+  \label{fig:modulated-ebm}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Climate-modulated energy-balance forecast for 2100 under selected
+  regional states. Temperature is in degrees Celsius.}
+  \label{tab:modulated-ebm-results}
+  \begin{tabular}{llrrr}
+    \toprule
+    Scenario & Regional state & $T_{\max}$ 2100 & Lower & Upper \\
+    \midrule
+    SSP2-4.5 & normal & 39.83 & 31.44 & 48.21 \\
+    SSP2-4.5 & sunny-dry & 44.08 & 35.70 & 52.47 \\
+    SSP2-4.5 & cloudy-wet & 35.57 & 27.19 & 43.96 \\
+    SSP3-7.0 & normal & 41.30 & 32.91 & 49.68 \\
+    SSP3-7.0 & sunny-dry & 45.55 & 37.17 & 53.94 \\
+    SSP3-7.0 & cloudy-wet & 37.04 & 28.66 & 45.43 \\
+    SSP5-8.5 & normal & 42.51 & 34.13 & 50.90 \\
+    SSP5-8.5 & sunny-dry & 46.77 & 38.38 & 55.15 \\
+    SSP5-8.5 & cloudy-wet & 38.26 & 29.87 & 46.64 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \section{Interpretation}
 
 The qualitative result is straightforward: within this model class, higher
@@ -277,6 +442,16 @@ Lower SSP pathways flatten the temperature trajectory, while SSP3-7.0 and
 especially SSP5-8.5 imply substantially higher heat extremes. The estimated
 coefficient on logarithmic CO$_2$ forcing in the structural time-series model is
 positive and statistically different from zero in the fitted state-space model.
+The energy-balance sensitivity model preserves the same direction but moderates
+the high-end outcomes: for SSP5-8.5, the 2100 point forecast falls from
+49.74$^\circ$C in the unconstrained structural time-series model to
+42.70$^\circ$C in the bounded energy-balance sensitivity model.
+The climate-modulated model adds an important regional interpretation: under
+SSP3-7.0, the 2100 point forecast is 41.30$^\circ$C under normal
+sunshine/precipitation conditions, 45.55$^\circ$C under a sunny-dry state, and
+37.04$^\circ$C under a cloudy-wet state. In this formulation, CO$_2$ sets the
+long-run background forcing, while sunshine and precipitation control whether
+regional heat extremes are amplified or damped.
 
 The interpretation should remain precise:
 \begin{itemize}
@@ -289,6 +464,16 @@ The interpretation should remain precise:
   structural breaks are not explicitly modelled.
   \item The uncertainty bands are model-based intervals, not full physical or
   socio-economic uncertainty ranges.
+  \item The energy-balance cap on $\kappa$ is a transparent physical
+  regularization. It is not identified from German annual extreme temperatures
+  alone.
+  \item Sunshine and precipitation are not externally prescribed climate-policy
+  scenarios. They are regional sensitivity states. Treating them as causal
+  controls would overstate what annual observational data can identify.
+  \item The climate-modulated model is regularized. This is deliberate: without
+  regularization, sunshine can absorb the common historical trend and make the
+  CO$_2$ coefficient vanish, which is not a physically credible attribution
+  structure.
   \item SSP5-8.5 is retained only as a historical CMIP6 stress test; it should be
   replaced by newer CMIP7 high-end pathways once those quantitative inputs are
   stable and public for routine use.
@@ -298,7 +483,7 @@ The interpretation should remain precise:
 
 The data collection and VARX analysis are run with:
 \begin{verbatim}
-python3 climate_var_vecm_forecast.py \
+python3 modeling/climate_var_vecm_forecast.py \
   --temperature-source hyras \
   --hyras-aggregation annual_spatial_max \
   --all-stations \
@@ -315,11 +500,13 @@ python3 climate_var_vecm_forecast.py \
 
 The Harvey-style scenario model is run separately:
 \begin{verbatim}
-python3 structural_time_series_forecast.py \
+python3 modeling/structural_time_series_forecast.py \
   --input outputs_full_hyras_exogco2_ssp585/climate_co2_aligned.csv \
   --cache-dir data_cache \
   --outdir outputs_structural_time_series \
-  --confidence-level 0.90
+  --confidence-level 0.90 \
+  --ebm-max-adjustment-rate 0.12 \
+  --modulated-plot-scenario ssp370
 \end{verbatim}
 
 \section{Preliminary Conclusion}
@@ -328,8 +515,13 @@ As a preliminary result from a deliberately naive statistical model, the main
 message is plausible: sustained increases in atmospheric CO$_2$ are associated
 with higher German annual maximum temperatures in the fitted model. The scenario
 spread is also informative. Moderate CO$_2$ pathways imply much less additional
-stress than very high pathways. SSP5-8.5 should now be read as an extreme legacy
-stress test rather than as a plausible central upper scenario.
+stress than very high pathways. Adding logarithmic radiative forcing and bounded
+thermal adjustment makes the upper scenario response less explosive and therefore
+more credible as a sensitivity analysis. Adding sunshine and precipitation makes
+the regional heat-risk story sharper: high CO$_2$ raises the baseline, while
+sunny and dry regional conditions can push extremes substantially higher.
+SSP5-8.5 should now be read as an extreme legacy stress test rather than as a
+plausible central upper scenario.
 
 \begin{thebibliography}{9}
 
@@ -364,6 +556,20 @@ Van Vuuren, D. et al. (2026).
 Intergovernmental Panel on Climate Change (2026).
 \newblock IPCC news comment on climate scenarios.
 \newblock \url{https://www.ipcc.ch/2026/05/20/ipcc-news-comment-2/}
+
+\bibitem{besselaar2015}
+Van den Besselaar, E. J. M., Sanchez-Lorenzo, A., Wild, M., Klein Tank, A. M. G.,
+and de Laat, A. T. J. (2015).
+\newblock Relationship between sunshine duration and temperature trends across
+Europe since the second half of the twentieth century.
+\newblock \emph{Journal of Geophysical Research: Atmospheres}, 120, 10823--10836.
+\newblock \url{https://doi.org/10.1002/2015JD023640}
+
+\bibitem{wild2009}
+Wild, M. (2009).
+\newblock Global dimming and brightening: A review.
+\newblock \emph{Journal of Geophysical Research: Atmospheres}, 114, D00D16.
+\newblock \url{https://doi.org/10.1029/2008JD011470}
 
 \bibitem{harvey1989}
 Harvey, A. C. (1989).

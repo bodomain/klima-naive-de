@@ -28,6 +28,7 @@ data_cache/
 
 # Generated tables and figures outside output folders
 *.png
+!data_viewer/frontend/src/assets/*.png
 *.pdf
 *.csv
 
